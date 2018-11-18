@@ -78,9 +78,25 @@ def Sending():
                     send = 'NAME ' + name
                     clientSocket.send(send.encode('utf-8'))
                     print('이름이 ' + name + '으로 변경되었습니다.')
-                    #NAME 프로토콜을 전송 후 print를 띄움.
+                    #NAME 프로토콜을 전송 후 print를 띄움.​
             elif stok[0][1:].upper() == 'EXIT':
                 clientSocket.close() #소켓을 종료합니다.
+            elif stok[0][1:].upper() == 'SEND':
+                filePath = stok[1]
+                fileName = filePath.split('/')[-1]
+
+                send = 'FILE START ' + fileName
+
+                clientSocket.send(send.encode('utf-8'))
+                fp = open(filePath, 'rb')
+                sendB = fp.read(1024)
+                while len(sendB) > 0:
+                    clientSocket.send(sendB)
+                    sendB = fp.read(1024)
+
+                send = 'FILE END'
+                clientSocket.send(send.encode('utf-8'))
+
             else:
                 print('Undefined Function!!!') #NAME, EXIT 이외의 명령어는 모르는 명령어입니다.
         else:
