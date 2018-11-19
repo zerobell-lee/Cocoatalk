@@ -1,6 +1,7 @@
 from socket import *
 from time import strftime
 import threading
+import time
 
 # 내 이름과 상대방 이름 변수 초기화 (string type)
 name = ''
@@ -27,33 +28,59 @@ while True:
     else:
         break
 
+fileMode = False
+
 def Receiving():
     global your_name
+    global fileMode
+    global fileName
+
     while True:
         #소켓으로부터 1024 byte의 입력을 대기. recv는 입력 완료 때까지 계속 기다린다.
-        data = clientSocket.recv(1024)
-        #byte로 전송된 data를 utf-8 형식으로 다시 디코딩
-        if data:
-            data_decoded = data.decode('utf-8')
+        try:
+            data = clientSocket.recv(1024)
+            if fileMode:
+                try:
+                    if data.decode('utf-8').rstrip().upper() == 'FILE END':
+                        fp.close()
+                        fileMode = False
+                        print('Completed!!')
+                    else:
+                        fp.write(data)
+                except UnicodeError:
+                    fp.write(data)
 
-            #프로토콜 분석을 위하여 data_decoded를 공백으로 분리한다.
-            stok = data_decoded.split()
-            if (stok[0].upper() == 'NAME'):
-                #만일 프로토콜이 'NAME' 프로토콜이라면
-                if your_name=='':
-                    your_name = stok[1]
-                    print('상대방(' + serverName + ')의 이름은 ' + your_name + '입니다')
-                    #만일 상대방이 처음으로 NAME 프로토콜을 전송한 경우라면, 위와 같이 처리한다.
-                else:
-                    print('상대방(' + serverName + ')의 이름이 ' + your_name + '에서 ' + stok[1] + '으로 바뀌었습니다.')
-                    your_name = stok[1]
-                    #대화 중에 NAME 프로토콜을 전송한 경우라면, 상대방의 이름을 변경하는 메시지를 표시한다.
-            elif (stok[0].upper() == 'MSG'):
-                #만일 프로토콜이 'MSG' 프로토콜이라면
-                del stok[0]
-                msg = " ".join(stok)
-                print('['+strftime('%H:%M:%S')+'] <' + your_name + '> : ' + msg)
-                #그 이후에 나오는 메시지를 전부 [timestamp] <your_name> : message 형식으로 print 한다.
+            else:
+                #byte로 전송된 data를 utf-8 형식으로 다시 디코딩
+                if data:
+                    data_decoded = data.decode('utf-8')
+                    #프로토콜 분석을 위하여 data_decoded를 공백으로 분리한다.
+                    stok = data_decoded.split()
+                    if (stok[0].upper() == 'NAME'):
+                        #만일 프로토콜이 'NAME' 프로토콜이라면
+                        if your_name=='':
+                            your_name = stok[1]
+                            print('상대방(' + serverName + ')의 이름은 ' + your_name + '입니다')
+                            #만일 상대방이 처음으로 NAME 프로토콜을 전송한 경우라면, 위와 같이 처리한다.
+                        else:
+                            print('상대방(' + serverName + ')의 이름이 ' + your_name + '에서 ' + stok[1] + '으로 바뀌었습니다.')
+                            your_name = stok[1]
+                            #대화 중에 NAME 프로토콜을 전송한 경우라면, 상대방의 이름을 변경하는 메시지를 표시한다.
+                    elif (stok[0].upper() == 'MSG'):
+                        #만일 프로토콜이 'MSG' 프로토콜이라면
+                        del stok[0]
+                        msg = " ".join(stok)
+                        print('['+strftime('%H:%M:%S')+'] <' + your_name + '> : ' + msg)
+                        #그 이후에 나오는 메시지를 전부 [timestamp] <your_name> : message 형식으로 print 한다.
+                    elif stok[0].upper() == 'FILE':
+                        if stok[1].upper() == 'START':
+                            fileName = stok[2]
+                            fp = open(fileName, 'wb')
+                            fileMode = True
+                            print('Establishing File Transfer...')
+        except ConnectionResetError:
+            print('상대방이 나갔습니다.')
+            exit(-1)
 
     clientSocket.close() #소켓을 닫는다. 정상적으로는 실행될 일 없음.
 
@@ -64,7 +91,7 @@ def Sending():
     #첫 연결이 되었을 때, 자신의 이름을 NAME 프로토콜로 알리도록 한다.
     while True:
         send = input('')
-        if (send==''):
+        if send=='':
             continue
         if send[0] == '/':
             #만일 '/'로 시작하는 메시지라면, 명령어로서 처리하도록 한다.
@@ -87,6 +114,7 @@ def Sending():
 
                 send = 'FILE START ' + fileName
 
+                print('Establishing File Transfer...')
                 clientSocket.send(send.encode('utf-8'))
                 fp = open(filePath, 'rb')
                 sendB = fp.read(1024)
@@ -94,15 +122,19 @@ def Sending():
                     clientSocket.send(sendB)
                     sendB = fp.read(1024)
 
+                time.sleep(0.5)
                 send = 'FILE END'
                 clientSocket.send(send.encode('utf-8'))
 
+                fp.close()
+                print('Completed!!')
             else:
                 print('Undefined Function!!!') #NAME, EXIT 이외의 명령어는 모르는 명령어입니다.
         else:
             send = 'MSG ' + send
             clientSocket.send(send.encode('utf-8'))
             #그 외는 전부 메시지로 처리하여 전송한다. utf-8로 encoding 하여 전송한다.
+
 
 clientSocket = socket(AF_INET, SOCK_STREAM)
 clientSocket.connect((serverName,serverPort))
